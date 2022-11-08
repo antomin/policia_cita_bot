@@ -1,76 +1,94 @@
 import time
 
-import requests
-# from seleniumwire import webdriver
-from selenium import webdriver
+import undetected_chromedriver
+from fake_useragent import UserAgent
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.select import Select
 from selenium.webdriver.support.wait import WebDriverWait
 
-from settings import BIRTH_YEAR, DELAY, DRIVER_PATH, FULL_NAME, PASSPORT_NUM, TG_TOKEN
-from proxy_settings import PROXY_PASSWORD, PROXY_USERNAME, PROXY_LIST
+from settings import (BIRTH_YEAR, COUNTRY, DELAY, DRIVER_PATH, FULL_NAME,
+                      PASSPORT_NUM, PROXY_HOST, PROXY_PORT, TG_TOKEN)
 
-url = 'https://icp.administracionelectronica.gob.es/icpco/citar?p=3&locale=es'
+URL = 'https://icp.administracionelectronica.gob.es/icpco/citar?p=3&locale=es'
+# URL = 'https://intoli.com/blog/not-possible-to-block-chrome-headless/chrome-headless-test.html'
+# URL = 'https://2ip.ru'
 
-options = webdriver.ChromeOptions()
 
-driver = webdriver.Chrome(executable_path=DRIVER_PATH, options=options)
+def get_driver():
+    useragent = UserAgent(use_cache_server=True)
 
-try:
-    driver.get(url=url)
-    WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.TAG_NAME, 'html')))
+    options = undetected_chromedriver.ChromeOptions()
+    options.add_argument(f'user-agent={useragent.random}')
 
-    select_office = Select(driver.find_element(By.ID, 'sede'))
-    select_office.select_by_value('14')
+    driver = undetected_chromedriver.Chrome(options=options)
 
-    WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, 'tramiteGrupo[0]')))
+    return driver
 
-    select_service = Select(driver.find_element(By.ID, 'tramiteGrupo[0]'))
-    select_service.select_by_value('4031')
 
-    driver.find_element(By.ID, 'cookie_action_close_header').click()
+def main():
+    driver = get_driver()
 
-    btn_next = driver.find_element(By.ID, 'btnAceptar')
-    btn_next.click()
+    try:
+        driver.get(URL)
 
-    btn_next = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, 'btnEntrar')))
-    btn_next.click()
+        # Cookie footer click
+        WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, 'cookie_action_close_header'))).click()
 
-    btn_next = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, 'btnEnviar')))
+        # Choice office
+        oficina_select = Select(WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, 'sede'))))
+        oficina_select.select_by_value('14')
 
-    driver.find_element(By.ID, 'txtIdCitado').send_keys(PASSPORT_NUM)
-    driver.find_element(By.ID, 'txtDesCitado').send_keys(FULL_NAME)
-    driver.find_element(By.ID, 'txtAnnoCitado').send_keys(BIRTH_YEAR)
+        # Choice service
+        service_select = Select(WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, 'tramiteGrupo[0]'))))
+        service_select.select_by_value('4031')
 
-    select_country = Select(driver.find_element(By.ID, 'txtPaisNac'))
-    select_country.select_by_value('149')
+        # Click next button
+        WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, 'btnAceptar'))).click()
 
-    btn_next.click()
+        # Click enter button
+        WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, 'btnEntrar'))).click()
 
-    btn_next = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, 'btnEnviar')))
-    btn_next.click()
+        # Page with data
+        next_btn = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, 'btnEnviar')))
 
-    while True:
-        response = driver.page_source
-        if 'En este momento no hay citas disponibles.' in response:
-            driver.refresh()
-            WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.TAG_NAME, 'html')))
-            time.sleep(DELAY)
-            continue
-        if '<h1>Too Many Requests</h1>' in response:
-            requests.get(f'https://api.telegram.org/bot{TG_TOKEN}/sendMessage?chat_id=@sita_policia_ch&text=НАС ЗАБЛОЧИЛИ!')
-            time.sleep(300)
-            driver.refresh()
-            WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.TAG_NAME, 'html')))
-            continue
-        break
-    requests.get(f'https://api.telegram.org/bot{TG_TOKEN}/sendMessage?chat_id=@sita_policia_ch&text=ТАМ ЧТО-ТО ПРОИЗОШЛО!')
-    driver.get_screenshot_as_file('screen.jpg')
-    waiter = input('what next?')
+        # Passport number
+        driver.find_element(By.ID, 'txtIdCitado').send_keys(PASSPORT_NUM)
+        # Name Surname
+        driver.find_element(By.ID, 'txtDesCitado').send_keys(FULL_NAME)
+        # Year of birth
+        driver.find_element(By.ID, 'txtAnnoCitado').send_keys(BIRTH_YEAR)
+        # Country
+        country_select = Select(driver.find_element(By.ID, 'txtPaisNac'))
+        country_select.select_by_value(COUNTRY)
 
-except Exception as e:
-    print(e)
-finally:
-    driver.close()
-    driver.quit()
+        next_btn.click()
+
+        # Finish button
+        WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, 'btnEnviar'))).click()
+
+        while True:
+            response = driver.page_source
+            if 'En este momento no hay citas disponibles.' in response:
+                driver.refresh()
+                WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.TAG_NAME, 'html')))
+                time.sleep(DELAY)
+                continue
+            if '<h1>Too Many Requests</h1>' in response:
+                time.sleep(300)
+                driver.refresh()
+                WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.TAG_NAME, 'html')))
+                continue
+            break
+
+        driver.get_screenshot_as_file('screen.jpg')
+
+    except Exception as error:
+        print(error)
+    finally:
+        driver.close()
+        driver.quit()
+
+
+if __name__ == '__main__':
+    main()
